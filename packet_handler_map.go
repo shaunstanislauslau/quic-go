@@ -99,7 +99,19 @@ func (h *packetHandlerMap) Add(id protocol.ConnectionID, handler packetHandler) 
 	h.mutex.Lock()
 	h.handlers[string(id)] = handler
 	h.mutex.Unlock()
-	return h.getStatelessResetToken(id)
+	return h.GetStatelessResetToken(id)
+}
+
+func (h *packetHandlerMap) AddIfNotTaken(id protocol.ConnectionID, handler packetHandler) bool /* was added */ {
+	var added bool
+	sid := string(id)
+	h.mutex.Lock()
+	if _, ok := h.handlers[sid]; !ok {
+		h.handlers[sid] = handler
+		added = true
+	}
+	h.mutex.Unlock()
+	return added
 }
 
 func (h *packetHandlerMap) Remove(id protocol.ConnectionID) {
@@ -284,7 +296,7 @@ func (h *packetHandlerMap) maybeHandleStatelessReset(data []byte) bool {
 	return false
 }
 
-func (h *packetHandlerMap) getStatelessResetToken(connID protocol.ConnectionID) [16]byte {
+func (h *packetHandlerMap) GetStatelessResetToken(connID protocol.ConnectionID) [16]byte {
 	var token [16]byte
 	if !h.statelessResetEnabled {
 		// Return a random stateless reset token.
@@ -311,7 +323,7 @@ func (h *packetHandlerMap) maybeSendStatelessReset(p *receivedPacket, connID pro
 	if len(p.data) <= protocol.MinStatelessResetSize {
 		return
 	}
-	token := h.getStatelessResetToken(connID)
+	token := h.GetStatelessResetToken(connID)
 	h.logger.Debugf("Sending stateless reset to %s (connection ID: %s). Token: %#x", p.remoteAddr, connID, token)
 	data := make([]byte, protocol.MinStatelessResetSize-16, protocol.MinStatelessResetSize)
 	rand.Read(data)
